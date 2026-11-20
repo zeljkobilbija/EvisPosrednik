@@ -1,0 +1,5 @@
+# Cloudflare Worker: posrednik za EVIS.AT (ASFINAG). Ključ je tajna: npx wrangler secret put EVIS_KEY
+name = "evis-posrednik"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
