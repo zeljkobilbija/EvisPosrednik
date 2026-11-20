@@ -11,7 +11,13 @@ const IZVOR = 'https://datasupply-evis.asfinag.at/1.0/getdata/EventsUnplanned/AT
 const KES_MS = 60_000;
 const ATRIBUCIJA = 'Datenquelle: EVIS.AT / ASFINAG, CC BY 4.0 ASFINAG';
 
-let kes = null; // { vreme, dogadjaji }
+// Planirani događaji (gradilišta): GitHub Action jednom na sat pravi planirano.json u grani "podaci"
+// (izvorni GeoJSON je ~2,8 MB – prevelik za besplatni Worker); ovde se čuva 10 min.
+const PLANIRANO = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci/planirano.json';
+const KES_PLAN_MS = 10 * 60_000;
+
+let kes = null;     // { vreme, dogadjaji } – neplanirani
+let kesPlan = null; // { vreme, dogadjaji } – planirani
 
 export default {
   async fetch(req, env) {
@@ -22,8 +28,19 @@ export default {
     try {
       const sad = Date.now();
       if (!kes || sad - kes.vreme > KES_MS) kes = { vreme: sad, dogadjaji: obradi(await preuzmi(env.EVIS_KEY)) };
+      if (!kesPlan || sad - kesPlan.vreme > KES_PLAN_MS) {
+        try {
+          const r = await fetch(PLANIRANO);
+          const j = r.ok ? await r.json() : null;
+          kesPlan = { vreme: sad, dogadjaji: (j && j.dogadjaji || []).filter(d => !d.en || d.en > sad) };
+        } catch (e) {
+          kesPlan = { vreme: sad, dogadjaji: kesPlan ? kesPlan.dogadjaji : [] };
+        }
+      }
       const put = (url.searchParams.get('put') || '').toUpperCase().replace(/^([AS])0*/, '$1');
-      const lista = put ? kes.dogadjaji.filter(d => d.p.includes(put)) : kes.dogadjaji;
+      const ids = new Set(kes.dogadjaji.map(d => d.id));
+      const sve = kes.dogadjaji.concat(kesPlan.dogadjaji.filter(d => !ids.has(d.id)));
+      const lista = put ? sve.filter(d => d.p.includes(put)) : sve;
       return json({ izvor: ATRIBUCIJA, vreme: kes.vreme, dogadjaji: lista });
     } catch (e) {
       return json({ greska: String(e && e.message || e) }, 502);

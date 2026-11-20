@@ -1,0 +1,33 @@
+# Jednom na sat: planirani događaji EVIS.AT / ASFINAG (gradilišta) → planirano.json u grani "podaci"
+# (grana se svaki put prepisuje jednim commit-om, pa istorija ne raste). Ključ je tajna EVIS_KEY.
+name: Planirani radovi (EVIS)
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: planirano
+  cancel-in-progress: true
+jobs:
+  planirano:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preuzmi i sažmi
+        env:
+          EVIS_KEY: ${{ secrets.EVIS_KEY }}
+        run: node alati/planirano.js izlaz/planirano.json
+      - name: Objavi u grani podaci
+        run: |
+          cd izlaz
+          git init -q -b podaci
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add planirano.json
+          git commit -q -m "Planirani događaji EVIS.AT / ASFINAG (CC BY 4.0 ASFINAG) – $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" podaci
