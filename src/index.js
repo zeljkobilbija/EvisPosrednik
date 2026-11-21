@@ -83,7 +83,7 @@ async function uk(url) {
 }
 
 async function pokreni(token, posao) {
-  if (!token) return;
+  if (!token) { console.log('nema GH_TOKEN'); return; }
   const r = await fetch('https://api.github.com/repos/zeljkobilbija/EvisPosrednik/actions/workflows/' + posao + '/dispatches', {
     method: 'POST',
     headers: {
@@ -92,7 +92,7 @@ async function pokreni(token, posao) {
     },
     body: JSON.stringify({ ref: 'main' }),
   });
-  if (r.status !== 204) console.log('GitHub ' + posao + ': HTTP ' + r.status);
+  console.log('GitHub ' + posao + ': HTTP ' + r.status + (r.status === 204 ? '' : ' ' + (await r.text()).slice(0, 200)));
 }
 
 function json(o, status = 200) {

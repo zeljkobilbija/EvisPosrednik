@@ -8,3 +8,6 @@ workers_dev = true
 # Treba tajna GH_TOKEN (fine-grained, samo repo EvisPosrednik, Actions: read/write): npx wrangler secret put GH_TOKEN
 [triggers]
 crons = ["*/10 * * * *"]
+
+[observability]
+enabled = true
