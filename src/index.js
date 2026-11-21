@@ -26,6 +26,13 @@ let kes = null;     // { vreme, dogadjaji } – neplanirani
 let kesPlan = null; // { vreme, dogadjaji } – planirani
 
 export default {
+  /** Tajmer (wrangler.toml): GitHub sam pouzdano ne pokreće zakazane poslove, pa ih ovde pokrećemo ručno (workflow_dispatch). */
+  async scheduled(ev, env, ctx) {
+    const poslovi = ['uk.yml'];
+    if (new Date(ev.scheduledTime).getUTCMinutes() < 10) poslovi.push('planirano.yml'); // jednom na sat
+    ctx.waitUntil(Promise.all(poslovi.map(p => pokreni(env.GH_TOKEN, p))));
+  },
+
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === '/uk') return await uk(url);
@@ -73,6 +80,19 @@ async function uk(url) {
   const put = bez(url.searchParams.get('put') || '');
   const lista = kesUk.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.some(x => bez(x) === put)));
   return json({ izvor: "Powered by National Highways' Transport Data Feeds", vreme: kesUk.izvor, dogadjaji: lista });
+}
+
+async function pokreni(token, posao) {
+  if (!token) return;
+  const r = await fetch('https://api.github.com/repos/zeljkobilbija/EvisPosrednik/actions/workflows/' + posao + '/dispatches', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'evis-posrednik',
+    },
+    body: JSON.stringify({ ref: 'main' }),
+  });
+  if (r.status !== 204) console.log('GitHub ' + posao + ': HTTP ' + r.status);
 }
 
 function json(o, status = 200) {

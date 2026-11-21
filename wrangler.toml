@@ -3,3 +3,8 @@ name = "evis-posrednik"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
 workers_dev = true
+
+# Tajmer (GitHub-ov cron je nepouzdan): na 10 min Worker pokreće GitHub Action uk.yml, jednom na sat planirano.yml.
+# Treba tajna GH_TOKEN (fine-grained, samo repo EvisPosrednik, Actions: read/write): npx wrangler secret put GH_TOKEN
+[triggers]
+crons = ["*/10 * * * *"]
