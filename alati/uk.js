@@ -71,7 +71,11 @@ const velikoPrvo = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
     const izm = lokacija.match(/between (.+?) and (.+?)$/i);
     const kod = lokacija.match(/\b(?:at|on) (.+?)$/i);
     const jct = opis.match(/\b(?:Jct|J)\s?(\d+[A-Z]?)\b/i);
-    const mesto = izm ? izm[1] + ' – ' + izm[2] : kod ? kod[1] : jct ? 'J' + jct[1] : '';
+    // bez čvora: tekst bez oznake puta i smera ("M56 Eastbound hardshoulder closure (MP 56/3 to 56/0)"
+    // → "Hardshoulder closure (MP 56/3 to 56/0)")
+    const ostatak = velikoPrvo(opis.replace(new RegExp('^' + put.replace(/[()]/g, '\\$&') + '\\s*', 'i'), '')
+      .replace(/^(?:north|south|east|west)bound\s*|^(?:anti-?)?clockwise\s*/i, '').trim());
+    const mesto = izm ? izm[1] + ' – ' + izm[2] : kod ? kod[1] : jct ? 'J' + jct[1] : ostatak.slice(0, 60);
     const smer = velikoPrvo((prvi(x, /<directionOnLinearSection>([^<]+)</) || '').toLowerCase()); // "Eastbound", "Anticlockwise"
 
     // linija (lat lon …): prva i poslednja tačka, u smeru vožnje
