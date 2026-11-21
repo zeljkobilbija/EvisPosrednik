@@ -16,12 +16,19 @@ const ATRIBUCIJA = 'Datenquelle: EVIS.AT / ASFINAG, CC BY 4.0 ASFINAG';
 const PLANIRANO = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci/planirano.json';
 const KES_PLAN_MS = 10 * 60_000;
 
+// Engleska: National Highways (Road and Lane Closures v2.0) – GitHub Action na 10 min pravi uk.json
+// u grani "podaci-uk" (izvor je ceo SRN, do 6 MB XML). "Powered by National Highways' Transport Data Feeds"
+const UK = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci-uk/uk.json';
+const KES_UK_MS = 5 * 60_000;
+let kesUk = null;
+
 let kes = null;     // { vreme, dogadjaji } – neplanirani
 let kesPlan = null; // { vreme, dogadjaji } – planirani
 
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+    if (url.pathname === '/uk') return await uk(url);
     if (url.pathname !== '/vesti') {
       return new Response('Austria Road Info – EVIS.AT posrednik. ' + ATRIBUCIJA, { status: 404 });
     }
@@ -47,6 +54,24 @@ export default {
     }
   },
 };
+
+/** GET /uk?put=M25 – zatvaranja na autoputu u Engleskoj (isti oblik zapisa kao /vesti). */
+async function uk(url) {
+  const sad = Date.now();
+  if (!kesUk || sad - kesUk.vreme > KES_UK_MS) {
+    try {
+      const r = await fetch(UK, { cf: { cacheTtl: 120 } });
+      const j = r.ok ? await r.json() : null;
+      kesUk = { vreme: sad, izvor: j ? j.vreme : 0, dogadjaji: (j && j.dogadjaji) || [] };
+    } catch (e) {
+      if (!kesUk) return json({ greska: String(e && e.message || e) }, 502);
+      kesUk.vreme = sad;
+    }
+  }
+  const put = (url.searchParams.get('put') || '').toUpperCase().replace(/\s+/g, '');
+  const lista = kesUk.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.includes(put)));
+  return json({ izvor: "Powered by National Highways' Transport Data Feeds", vreme: kesUk.izvor, dogadjaji: lista });
+}
 
 function json(o, status = 200) {
   return new Response(JSON.stringify(o), {
