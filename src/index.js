@@ -68,8 +68,10 @@ async function uk(url) {
       kesUk.vreme = sad;
     }
   }
-  const put = (url.searchParams.get('put') || '').toUpperCase().replace(/\s+/g, '');
-  const lista = kesUk.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.includes(put)));
+  // "A1(M)" i "A1M" (oznaka u aplikacijama) su isti put
+  const bez = x => x.toUpperCase().replace(/[\s()]+/g, '');
+  const put = bez(url.searchParams.get('put') || '');
+  const lista = kesUk.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.some(x => bez(x) === put)));
   return json({ izvor: "Powered by National Highways' Transport Data Feeds", vreme: kesUk.izvor, dogadjaji: lista });
 }
 
