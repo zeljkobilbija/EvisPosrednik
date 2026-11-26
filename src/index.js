@@ -103,8 +103,11 @@ async function fr(url, req, env) {
     'User-Agent': 'evis-posrednik',
     Accept: 'application/xml',
   };
-  const etag = req.headers.get('If-None-Match');
+  const etag = (req.headers.get('If-None-Match') || '').replace(/^W\//, ''); // Cloudflare ETag pravi slabim (W/)
   if (etag) zaglavlja['If-None-Match'] = etag;
+  // Apache sa "-gzip" ETag-om često ne vraća 304 na If-None-Match; If-Modified-Since radi
+  const ims = req.headers.get('If-Modified-Since');
+  if (ims) zaglavlja['If-Modified-Since'] = ims;
   const r = await fetch(TIPI + tok + '/content.xml', { headers: zaglavlja });
   if (r.status !== 200 && r.status !== 304) return json({ greska: 'Tipi HTTP ' + r.status }, 502);
   const h = new Headers({ 'Cache-Control': 'no-store' });
