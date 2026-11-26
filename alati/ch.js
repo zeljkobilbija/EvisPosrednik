@@ -27,7 +27,8 @@ const vreme = s => { const t = Date.parse(s || ''); return isNaN(t) ? 0 : t; };
 const sviTagovi = (s, tag) => [...s.matchAll(new RegExp('<' + T + tag + '[^>]*>([^<]*)<', 'g'))].map(m => m[1]);
 
 /** "Anschluss Villeneuve" → "Villeneuve"; "Verzweigung Hagnau", "Raststätte Yvorne" ostaju (vrsta je deo imena). */
-const ocisti = m => m.replace(/^(?:Anschluss|Ortschaft|Kreuzung|Ausfahrt|Einfahrt)\s+/i, '').trim();
+const ocisti = m => m.replace(/^(?:Autobahndreieck|Autobahnkreuz)\s+/i, '')
+  .replace(/^(?:Anschluss|Ortschaft|Kreuzung|Ausfahrt|Einfahrt)\s+/i, '').replace(/^Tunnel\s+(.+-Tunnel)$/i, '$1').trim();
 
 (async () => {
   const kljuc = process.env.OTD_KEY;
@@ -98,6 +99,12 @@ const ocisti = m => m.replace(/^(?:Anschluss|Ortschaft|Kreuzung|Ausfahrt|Einfahr
       if (!podtipovi.includes('roadClosed')) podtipovi.push('roadClosed');
     }
     if (/Ausfahrt gesperrt|Einfahrt gesperrt/i.test(sachlage)) podtipovi.push('slipRoads');
+    // radovi se u izvoru vode i kao „AbnormalTraffic“ (Verkehrsbehinderung) – kolona samo kad tekst kaže „Stau“
+    if (planirano && !/Stau|stockender Verkehr/i.test(sachlage)) {
+      const i = tipovi.indexOf('AbnormalTraffic');
+      if (i >= 0) tipovi.splice(i, 1);
+      if (!tipovi.length) tipovi.push('MaintenanceWorks');
+    }
     if (/Unfall/i.test(sachlage) && !tipovi.includes('Accident')) tipovi.unshift('Accident');
     if (/Stau|stockender Verkehr/i.test(sachlage) && !tipovi.includes('AbnormalTraffic')) tipovi.push('AbnormalTraffic');
     if (/Panne|Fahrzeug/i.test(sachlage) && /Panne/i.test(sachlage)) { tipovi.push('VehicleObstruction'); podtipovi.push('brokenDownVehicle'); }
