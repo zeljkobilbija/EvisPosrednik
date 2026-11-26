@@ -1,0 +1,30 @@
+# Na 10 minuta: vesti o saobraćaju na autoputevima Španije (DGT, NAP „Incidencias DGT DATEX2 v3.7“, CC BY) → es.json u grani "podaci-es". Bez ključa.
+name: Španija (DGT)
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: es
+  cancel-in-progress: true
+jobs:
+  es:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preuzmi i sažmi
+        run: node alati/es.js izlaz/es.json
+      - name: Objavi u grani podaci-es
+        run: |
+          cd izlaz
+          git init -q -b podaci-es
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add es.json
+          git commit -q -m "Vesti Španija – $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" podaci-es
