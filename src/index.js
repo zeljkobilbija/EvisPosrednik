@@ -22,6 +22,13 @@ const UK = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci
 const KES_UK_MS = 5 * 60_000;
 let kesUk = null;
 
+// Francuska: Bison Futé (DGITM/Tipi), ograničen pristup uz potpisane licence „Action B“ (sav saobraćaj,
+// i autoputevi sa naplatom) i „Action C“ (bezbednost na putu, prikazuje se prva). Podaci se prosleđuju
+// NEIZMENJENI (licenca: bez menjanja sadržaja); u aplikaciji „Information fournie par …“ + vreme ažuriranja.
+// Login je tajna na Cloudflare-u: TIPI_KORISNIK i TIPI_LOZINKA (nikad u aplikaciji ni na GitHub-u).
+// Aplikacija pita: GET /fr?tok=c ili /fr?tok=b → content.xml (DATEX II 2.0, gzip ~46 KB / ~210 KB).
+const TIPI = 'https://tipi.bison-fute.gouv.fr/bison-fute-restreint/publications-restreintes/grt/ACTION-';
+
 let kes = null;     // { vreme, dogadjaji } – neplanirani
 let kesPlan = null; // { vreme, dogadjaji } – planirani
 
@@ -36,6 +43,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === '/uk') return await uk(url);
+    if (url.pathname === '/fr') return await fr(url, req, env);
     if (url.pathname !== '/vesti') {
       return new Response('Austria Road Info – EVIS.AT posrednik. ' + ATRIBUCIJA, { status: 404 });
     }
@@ -80,6 +88,28 @@ async function uk(url) {
   const put = bez(url.searchParams.get('put') || '');
   const lista = kesUk.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.some(x => bez(x) === put)));
   return json({ izvor: "Powered by National Highways' Transport Data Feeds", vreme: kesUk.izvor, dogadjaji: lista });
+}
+
+/**
+ * GET /fr?tok=c|b – francuski tok prosleđen bez obrade (telo ostaje gzip, Worker skoro ne troši CPU).
+ * If-None-Match ide do izvora, pa nepromenjen fajl vraća 304 bez preuzimanja (aplikacija čuva ETag).
+ */
+async function fr(url, req, env) {
+  const tok = (url.searchParams.get('tok') || 'c').toUpperCase();
+  if (tok !== 'B' && tok !== 'C') return new Response('tok=b ili tok=c', { status: 400 });
+  if (!env.TIPI_KORISNIK || !env.TIPI_LOZINKA) return json({ greska: 'nema TIPI_KORISNIK/TIPI_LOZINKA' }, 502);
+  const zaglavlja = {
+    Authorization: 'Basic ' + btoa(env.TIPI_KORISNIK + ':' + env.TIPI_LOZINKA),
+    'User-Agent': 'evis-posrednik',
+    Accept: 'application/xml',
+  };
+  const etag = req.headers.get('If-None-Match');
+  if (etag) zaglavlja['If-None-Match'] = etag;
+  const r = await fetch(TIPI + tok + '/content.xml', { headers: zaglavlja });
+  if (r.status !== 200 && r.status !== 304) return json({ greska: 'Tipi HTTP ' + r.status }, 502);
+  const h = new Headers({ 'Cache-Control': 'no-store' });
+  for (const k of ['Content-Type', 'ETag', 'Last-Modified']) if (r.headers.get(k)) h.set(k, r.headers.get(k));
+  return new Response(r.status === 304 ? null : r.body, { status: r.status, headers: h });
 }
 
 async function pokreni(token, posao) {
