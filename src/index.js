@@ -22,6 +22,12 @@ const UK = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci
 const KES_UK_MS = 5 * 60_000;
 let kesUk = null;
 
+// Švajcarska: FEDRO/ASTRA Traffic Data Platform – GitHub Action na 10 min pravi ch.json u grani "podaci-ch"
+// (izvor ~9 MB XML; samo obrađeni zapisi za autoputeve, ne sirovi podaci – uslovi FEDRO). Ključ OTD_KEY je na GitHub-u.
+const CH = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci-ch/ch.json';
+const CH_NATPIS = 'Data source: Federal Roads Office (FEDRO) Traffic Data Platform (TDP)';
+let kesCh = null;
+
 // Francuska: Bison Futé (DGITM/Tipi), ograničen pristup uz potpisane licence „Action B“ (sav saobraćaj,
 // i autoputevi sa naplatom) i „Action C“ (bezbednost na putu, prikazuje se prva). Podaci se prosleđuju
 // NEIZMENJENI (licenca: bez menjanja sadržaja); u aplikaciji „Information fournie par …“ + vreme ažuriranja.
@@ -35,7 +41,7 @@ let kesPlan = null; // { vreme, dogadjaji } – planirani
 export default {
   /** Tajmer (wrangler.toml): GitHub sam pouzdano ne pokreće zakazane poslove, pa ih ovde pokrećemo ručno (workflow_dispatch). */
   async scheduled(ev, env, ctx) {
-    const poslovi = ['uk.yml'];
+    const poslovi = ['uk.yml', 'ch.yml'];
     if (new Date(ev.scheduledTime).getUTCMinutes() < 10) poslovi.push('planirano.yml'); // jednom na sat
     ctx.waitUntil(Promise.all(poslovi.map(p => pokreni(env.GH_TOKEN, p))));
   },
@@ -43,6 +49,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === '/uk') return await uk(url);
+    if (url.pathname === '/ch') return await ch(url);
     if (url.pathname === '/fr') return await fr(url, req, env);
     if (url.pathname !== '/vesti') {
       return new Response('Austria Road Info – EVIS.AT posrednik. ' + ATRIBUCIJA, { status: 404 });
@@ -71,6 +78,24 @@ export default {
 };
 
 /** GET /uk?put=M25 – zatvaranja na autoputu u Engleskoj (isti oblik zapisa kao /vesti). */
+/** GET /ch?put=A1 – vesti za švajcarski autoput (isti oblik zapisa kao /vesti i /uk). */
+async function ch(url) {
+  const sad = Date.now();
+  if (!kesCh || sad - kesCh.vreme > KES_UK_MS) {
+    try {
+      const r = await fetch(CH, { cf: { cacheTtl: 120 } });
+      const j = r.ok ? await r.json() : null;
+      kesCh = { vreme: sad, izvor: j ? j.vreme : 0, dogadjaji: (j && j.dogadjaji) || [] };
+    } catch (e) {
+      if (!kesCh) return json({ greska: String(e && e.message || e) }, 502);
+      kesCh.vreme = sad;
+    }
+  }
+  const put = (url.searchParams.get('put') || '').toUpperCase().replace(/\s+/g, '');
+  const lista = kesCh.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.includes(put)));
+  return json({ izvor: CH_NATPIS, vreme: kesCh.izvor, dogadjaji: lista });
+}
+
 async function uk(url) {
   const sad = Date.now();
   if (!kesUk || sad - kesUk.vreme > KES_UK_MS) {

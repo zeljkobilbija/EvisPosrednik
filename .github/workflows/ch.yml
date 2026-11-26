@@ -1,0 +1,34 @@
+# Na 10 minuta: vesti o saobraćaju na švajcarskim autoputevima (FEDRO/ASTRA Traffic Data Platform, opentransportdata.swiss)
+# → ch.json u grani "podaci-ch" (samo obrađeni zapisi, ne sirovi podaci – uslovi FEDRO). Ključ je tajna OTD_KEY.
+# "Data source: Federal Roads Office (FEDRO) Traffic Data Platform (TDP)"
+name: Švajcarska (FEDRO TDP)
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ch
+  cancel-in-progress: true
+jobs:
+  ch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preuzmi i sažmi
+        env:
+          OTD_KEY: ${{ secrets.OTD_KEY }}
+        run: node alati/ch.js izlaz/ch.json
+      - name: Objavi u grani podaci-ch
+        run: |
+          cd izlaz
+          git init -q -b podaci-ch
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add ch.json
+          git commit -q -m "Vesti FEDRO TDP – $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" podaci-ch
