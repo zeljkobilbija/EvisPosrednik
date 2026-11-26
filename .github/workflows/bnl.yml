@@ -1,0 +1,31 @@
+# Na 10 minuta: vesti o saobraćaju na autoputevima Beneluksa → bnl.json u grani "podaci-bnl".
+# NL: NDW actueel_beeld (CC0) · BE: Verkeerscentrum Vlaanderen DATEX II (CC BY) · LU: CITA DATEX II (CC0). Bez ključeva.
+name: Beneluks (NDW, Verkeerscentrum, CITA)
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bnl
+  cancel-in-progress: true
+jobs:
+  bnl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preuzmi i sažmi
+        run: node alati/bnl.js izlaz/bnl.json
+      - name: Objavi u grani podaci-bnl
+        run: |
+          cd izlaz
+          git init -q -b podaci-bnl
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add bnl.json
+          git commit -q -m "Vesti Beneluks – $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" podaci-bnl

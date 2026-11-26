@@ -28,6 +28,11 @@ const CH = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci
 const CH_NATPIS = 'Data source: Federal Roads Office (FEDRO) Traffic Data Platform (TDP)';
 let kesCh = null;
 
+// Beneluks: NDW (NL, CC0), Verkeerscentrum Vlaanderen (BE, CC BY), CITA (LU, CC0) – GitHub Action na 10 min
+// pravi bnl.json u grani "podaci-bnl" (vesti već smeštene na autoputeve aplikacije: "NL-A2", "BE-E40"…).
+const BNL = 'https://raw.githubusercontent.com/zeljkobilbija/EvisPosrednik/podaci-bnl/bnl.json';
+let kesBnl = null;
+
 // Francuska: Bison Futé (DGITM/Tipi), ograničen pristup uz potpisane licence „Action B“ (sav saobraćaj,
 // i autoputevi sa naplatom) i „Action C“ (bezbednost na putu, prikazuje se prva). Podaci se prosleđuju
 // NEIZMENJENI (licenca: bez menjanja sadržaja); u aplikaciji „Information fournie par …“ + vreme ažuriranja.
@@ -41,7 +46,7 @@ let kesPlan = null; // { vreme, dogadjaji } – planirani
 export default {
   /** Tajmer (wrangler.toml): GitHub sam pouzdano ne pokreće zakazane poslove, pa ih ovde pokrećemo ručno (workflow_dispatch). */
   async scheduled(ev, env, ctx) {
-    const poslovi = ['uk.yml', 'ch.yml'];
+    const poslovi = ['uk.yml', 'ch.yml', 'bnl.yml'];
     if (new Date(ev.scheduledTime).getUTCMinutes() < 10) poslovi.push('planirano.yml'); // jednom na sat
     ctx.waitUntil(Promise.all(poslovi.map(p => pokreni(env.GH_TOKEN, p))));
   },
@@ -50,6 +55,7 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === '/uk') return await uk(url);
     if (url.pathname === '/ch') return await ch(url);
+    if (url.pathname === '/bnl') return await bnl(url);
     if (url.pathname === '/fr') return await fr(url, req, env);
     if (url.pathname !== '/vesti') {
       return new Response('Austria Road Info – EVIS.AT posrednik. ' + ATRIBUCIJA, { status: 404 });
@@ -94,6 +100,24 @@ async function ch(url) {
   const put = (url.searchParams.get('put') || '').toUpperCase().replace(/\s+/g, '');
   const lista = kesCh.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.includes(put)));
   return json({ izvor: CH_NATPIS, vreme: kesCh.izvor, dogadjaji: lista });
+}
+
+/** GET /bnl?put=NL-A2 (ili BE-A1, LU-A6) – vesti za autoput Beneluksa; bez put: sve. */
+async function bnl(url) {
+  const sad = Date.now();
+  if (!kesBnl || sad - kesBnl.vreme > KES_UK_MS) {
+    try {
+      const r = await fetch(BNL, { cf: { cacheTtl: 120 } });
+      const j = r.ok ? await r.json() : null;
+      kesBnl = { vreme: sad, izvor: j ? j.vreme : 0, natpis: j ? j.izvor : '', dogadjaji: (j && j.dogadjaji) || [] };
+    } catch (e) {
+      if (!kesBnl) return json({ greska: String(e && e.message || e) }, 502);
+      kesBnl.vreme = sad;
+    }
+  }
+  const put = (url.searchParams.get('put') || '').toUpperCase().replace(/\s+/g, '');
+  const lista = kesBnl.dogadjaji.filter(d => (!d.en || d.en > sad) && (!put || d.p.includes(put)));
+  return json({ izvor: kesBnl.natpis, vreme: kesBnl.izvor, dogadjaji: lista });
 }
 
 async function uk(url) {
